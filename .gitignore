@@ -1,0 +1,14 @@
+# Node.js
+node_modules/
+.next/
+pnpm-lock.yaml
+package-lock.json
+
+# Python
+__pycache__/
+*.pyc
+sehat_sathi.db
+.env.local
+
+# VS Code
+.vscode/
