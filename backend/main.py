@@ -414,44 +414,63 @@ async def approve_user(user_id: int, token_data: dict = Depends(verify_token)):
 
 @app.post("/pharmacy/signup")
 async def pharmacy_signup(pharmacy_data: dict):
-    with get_db() as conn:
-        cursor = conn.cursor()
+    try:
+        print(f"Received pharmacy signup data: {pharmacy_data}")
         
-        # Check if pharmacy already exists
-        cursor.execute("SELECT * FROM users WHERE email = ?", (pharmacy_data.get("email"),))
-        if cursor.fetchone():
-            raise HTTPException(status_code=400, detail="Pharmacy already registered with this email")
-        
-        # Generate username and password
-        username = pharmacy_data.get("name", "").lower().replace(" ", "_")
-        password = "password123"  # Default password
-        
-        # Create pharmacy user (pending approval)
-        cursor.execute('''
-            INSERT INTO users (username, email, password_hash, user_type, is_approved, 
-                             pharmacy_name, license_number, address, phone)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            username,
-            pharmacy_data.get("email"),
-            hash_password(password),
-            "pharmacy",
-            False,  # Requires approval
-            pharmacy_data.get("name"),
-            pharmacy_data.get("license"),
-            pharmacy_data.get("location"),
-            pharmacy_data.get("phone")
-        ))
-        conn.commit()
-        
-        return {
-            "message": "Pharmacy registration submitted successfully. Awaiting government approval.",
-            "credentials": {
-                "username": username,
-                "password": password,
-                "pharmacy_name": pharmacy_data.get("name")
+        with get_db() as conn:
+            cursor = conn.cursor()
+            
+            # Check if pharmacy already exists
+            cursor.execute("SELECT * FROM users WHERE email = ?", (pharmacy_data.get("email"),))
+            if cursor.fetchone():
+                raise HTTPException(status_code=400, detail="Pharmacy already registered with this email")
+            
+            # Generate username and password
+            base_username = pharmacy_data.get("name", "").lower().replace(" ", "_")
+            username = base_username
+            password = pharmacy_data.get("password", "password123")  # Use custom password or default
+            
+            # Ensure username is unique
+            counter = 1
+            while True:
+                cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
+                if not cursor.fetchone():
+                    break
+                username = f"{base_username}_{counter}"
+                counter += 1
+            
+            print(f"Creating pharmacy user: {username}")
+            
+            # Create pharmacy user (pending approval)
+            cursor.execute('''
+                INSERT INTO users (username, email, password_hash, user_type, is_approved, 
+                                 pharmacy_name, license_number, address, phone)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                username,
+                pharmacy_data.get("email"),
+                hash_password(password),
+                "pharmacy",
+                False,  # Requires approval
+                pharmacy_data.get("name"),
+                pharmacy_data.get("license"),
+                pharmacy_data.get("location"),
+                pharmacy_data.get("phone")
+            ))
+            conn.commit()
+            
+            print(f"Pharmacy user created successfully: {username}")
+            
+            return {
+                "message": "Pharmacy registration submitted successfully. Awaiting government approval.",
+                "credentials": {
+                    "username": username,
+                    "pharmacy_name": pharmacy_data.get("name")
+                }
             }
-        }
+    except Exception as e:
+        print(f"Error in pharmacy signup: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @app.get("/api/pharmacy/stocks")
 async def get_pharmacy_stocks(token_data: dict = Depends(verify_token)):
@@ -472,6 +491,13 @@ async def add_pharmacy_stock(stock: PharmacyStock, token_data: dict = Depends(ve
     
     with get_db() as conn:
         cursor = conn.cursor()
+        
+        # Check if pharmacy is approved
+        cursor.execute("SELECT is_approved FROM users WHERE id = ?", (token_data["user_id"],))
+        user = cursor.fetchone()
+        if not user or not user["is_approved"]:
+            raise HTTPException(status_code=403, detail="Pharmacy account must be approved by government before adding medicines")
+        
         cursor.execute('''
             INSERT INTO pharmacy_stocks (pharmacy_id, medicine_name, quantity, price, expiry_date, batch_number)
             VALUES (?, ?, ?, ?, ?, ?)
