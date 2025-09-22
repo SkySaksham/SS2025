@@ -422,7 +422,8 @@ async def pharmacy_signup(pharmacy_data: dict):
             
             # Check if pharmacy already exists
             cursor.execute("SELECT * FROM users WHERE email = ?", (pharmacy_data.get("email"),))
-            if cursor.fetchone():
+            existing_user = cursor.fetchone()
+            if existing_user:
                 raise HTTPException(status_code=400, detail="Pharmacy already registered with this email")
             
             # Generate username and password
@@ -465,11 +466,17 @@ async def pharmacy_signup(pharmacy_data: dict):
                 "message": "Pharmacy registration submitted successfully. Awaiting government approval.",
                 "credentials": {
                     "username": username,
+                    "password": password,
                     "pharmacy_name": pharmacy_data.get("name")
                 }
             }
+    except HTTPException:
+        # Re-raise HTTP exceptions (like 400 for duplicate email)
+        raise
     except Exception as e:
+        import traceback
         print(f"Error in pharmacy signup: {str(e)}")
+        print(f"Full traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @app.get("/api/pharmacy/stocks")

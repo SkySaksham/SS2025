@@ -20,6 +20,12 @@ export default function PharmacySignup() {
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState("")
 
+  const handleRefresh = () => {
+    // Clear any error/success messages but preserve form data
+    setMessage("")
+    setLoading(false)
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
@@ -68,9 +74,9 @@ export default function PharmacySignup() {
             <div className="flex justify-between items-start mb-8">
               <div></div>
               <button 
-                onClick={() => window.location.reload()} 
+                onClick={handleRefresh} 
                 className="btn btn-outline text-sm"
-                title="Refresh page"
+                title="Clear messages and reset form state"
               >
                 🔄 Refresh
               </button>
