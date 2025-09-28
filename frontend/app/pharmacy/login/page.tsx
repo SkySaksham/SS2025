@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useAuth } from "@/contexts/AuthContext"
@@ -8,15 +8,16 @@ import { useAuth } from "@/contexts/AuthContext"
 export default function PharmacyLogin() {
   const router = useRouter()
   const { login } = useAuth()
-  const [formData, setFormData] = useState({
-    username: "",
-    password: "",
-  })
+  const [formData, setFormData] = useState({ username: "", password: "" })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [animateCard, setAnimateCard] = useState(false)
+
+  useEffect(() => {
+    setAnimateCard(true)
+  }, [])
 
   const handleRefresh = () => {
-    // Clear error messages but preserve form data
     setError("")
     setLoading(false)
   }
@@ -41,145 +42,164 @@ export default function PharmacyLogin() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-indigo-900 flex items-center justify-center">
-      <div className="card p-8 w-full max-w-md">
-        <div className="text-center mb-8">
-          <div className="flex justify-between items-start mb-4">
-            <div></div>
-            <button 
-              onClick={handleRefresh} 
-              className="btn btn-outline text-sm"
-              title="Clear messages and reset form state"
-            >
-              🔄 Refresh
-            </button>
-          </div>
-          <h1 className="text-2xl font-bold">SehatSathi Web Portal</h1>
-          <p className="text-muted-foreground mt-2">Pharmacy & Government Access</p>
-          <div className="bg-blue-900/50 border border-blue-700/50 rounded-lg p-3 mt-4">
-            <p className="text-blue-200 text-xs leading-relaxed">
-              Supporting healthcare delivery across 173 rural villages in Nabha region. This portal helps coordinate
-              medicine availability and reduce patient travel.
-            </p>
-          </div>
-        </div>
+    <div className="min-h-screen flex items-center justify-center py-16 relative overflow-hidden">
+      {/* Animated gradient background */}
+      <div className="absolute inset-0 bg-gradient-to-r from-purple-200 via-purple-100 to-purple-300 animate-gradient-x -z-20"></div>
 
-        {error && <div className="bg-red-900 text-red-100 p-3 rounded mb-4">{error}</div>}
+      {/* Floating particles */}
+      <div className="absolute inset-0 -z-10">
+        {Array.from({ length: 30 }).map((_, i) => (
+          <div
+            key={i}
+            className="absolute bg-white rounded-full opacity-30 w-1.5 h-1.5 animate-particle"
+            style={{
+              top: `${Math.random() * 100}%`,
+              left: `${Math.random() * 100}%`,
+              animationDuration: `${5 + Math.random() * 10}s`,
+              animationDelay: `${Math.random() * 5}s`,
+            }}
+          ></div>
+        ))}
+      </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-2">Username</label>
-            <input
-              type="text"
-              value={formData.username}
-              onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-              className="input w-full"
-              placeholder="Enter your pharmacy name"
-              required
-            />
-          </div>
+      <div className="relative w-full max-w-2xl">
+        <div className="absolute inset-0 rounded-xl bg-white shadow-2xl opacity-20 -z-10"></div>
 
-          <div>
-            <label className="block text-sm font-medium mb-2">Password</label>
-            <input
-              type="password"
-              value={formData.password}
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              className="input w-full"
-              placeholder="Enter your password"
-              required
-            />
+        <div
+          className={`card p-8 w-full h-auto border-t-4 border-b-4 border-purple-600 bg-white shadow-xl rounded-lg transform transition-transform duration-500 ${
+            animateCard ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"
+          } hover:-translate-y-2 hover:shadow-2xl`}
+        >
+          {/* Header */}
+          <div className="text-center mb-6">
+            <div className="flex justify-between items-start mb-2">
+              <div></div>
+              <button
+                onClick={handleRefresh}
+                className="px-3 py-1 border border-purple-500 text-purple-600 rounded-md text-sm hover:bg-purple-50 transition"
+                title="Clear messages"
+              >
+                🔄 Refresh
+              </button>
+            </div>
+            <h1 className="text-2xl font-bold text-purple-700 drop-shadow-sm">Pharmacy Login</h1>
+            <p className="text-purple-500 mt-1 text-sm">SehatSathi Portal</p>
           </div>
 
-          <button type="submit" disabled={loading} className="btn btn-primary w-full py-3">
-            {loading ? "Logging in..." : "Login"}
-          </button>
-        </form>
+          {/* Error Box */}
+          {error && (
+            <div className="bg-purple-100 text-purple-800 p-3 rounded mb-4 border border-purple-300 shadow-inner text-sm">
+              {error}
+            </div>
+          )}
 
-        {/* Quick Login Buttons */}
-        <div className="mt-6 space-y-3">
-          <p className="text-sm font-medium text-center text-muted-foreground">Quick Access:</p>
-          <div className="grid grid-cols-1 gap-3">
+          {/* Login Form */}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-1 text-purple-700">Username</label>
+              <input
+                type="text"
+                value={formData.username}
+                onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                className="w-full border border-purple-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:shadow-md transition"
+                placeholder="Enter username"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1 text-purple-700">Password</label>
+              <input
+                type="password"
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                className="w-full border border-purple-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:shadow-md transition"
+                placeholder="Enter password"
+                required
+              />
+            </div>
+
             <button
-              onClick={() => fillCredentials("rajesh_medicals", "pharmacy123")}
-              className="group relative overflow-hidden rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white p-3 transition-all duration-200 hover:scale-105 hover:shadow-lg"
+              type="submit"
+              disabled={loading}
+              className="w-full py-3 rounded-lg bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white font-medium transition-all shadow-md"
             >
-              <div className="flex items-center justify-center space-x-2">
-                <span className="text-lg">💊</span>
+              {loading ? "Logging in..." : "Access Portal"}
+            </button>
+          </form>
+
+          {/* Quick Access Buttons */}
+          <div className="mt-6">
+            <p className="text-sm font-medium text-center text-purple-600 mb-3">Quick Access:</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <button
+                onClick={() => fillCredentials("rajesh_medicals", "pharmacy123")}
+                className="group relative overflow-hidden rounded-lg bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white p-3 transition-all duration-300 transform hover:scale-105 hover:shadow-glow flex items-center space-x-3"
+              >
+                <div className="bg-white/20 rounded-full w-8 h-8 flex items-center justify-center">
+                  <span className="text-lg">💊</span>
+                </div>
                 <div className="text-left">
                   <div className="font-semibold text-sm">Rajesh Medicals</div>
                   <div className="text-xs opacity-90">rajesh_medicals / pharmacy123</div>
                 </div>
-              </div>
-            </button>
-            <button
-              onClick={() => fillCredentials("apollo_pharmacy_delhi", "pharmacy123")}
-              className="group relative overflow-hidden rounded-lg bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white p-3 transition-all duration-200 hover:scale-105 hover:shadow-lg"
-            >
-              <div className="flex items-center justify-center space-x-2">
-                <span className="text-lg">🏥</span>
+              </button>
+
+              <button
+                onClick={() => fillCredentials("apollo_pharmacy_delhi", "pharmacy123")}
+                className="group relative overflow-hidden rounded-lg bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white p-3 transition-all duration-300 transform hover:scale-105 hover:shadow-glow flex items-center space-x-3"
+              >
+                <div className="bg-white/20 rounded-full w-8 h-8 flex items-center justify-center">
+                  <span className="text-lg">🏥</span>
+                </div>
                 <div className="text-left">
                   <div className="font-semibold text-sm">Apollo Pharmacy Delhi</div>
                   <div className="text-xs opacity-90">apollo_pharmacy_delhi / pharmacy123</div>
                 </div>
-              </div>
-            </button>
-            <button
-              onClick={() => fillCredentials("medplus_bangalore", "pharmacy123")}
-              className="group relative overflow-hidden rounded-lg bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white p-3 transition-all duration-200 hover:scale-105 hover:shadow-lg"
-            >
-              <div className="flex items-center justify-center space-x-2">
-                <span className="text-lg">💊</span>
-                <div className="text-left">
-                  <div className="font-semibold text-sm">MedPlus Bangalore</div>
-                  <div className="text-xs opacity-90">medplus_bangalore / pharmacy123</div>
-                </div>
-              </div>
-            </button>
-            <button
-              onClick={() => fillCredentials("govt_admin", "govt123")}
-              className="group relative overflow-hidden rounded-lg bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white p-3 transition-all duration-200 hover:scale-105 hover:shadow-lg"
-            >
-              <div className="flex items-center justify-center space-x-2">
-                <span className="text-lg">🏛️</span>
-                <div className="text-left">
-                  <div className="font-semibold text-sm">Government Admin</div>
-                  <div className="text-xs opacity-90">govt_admin / govt123</div>
-                </div>
-              </div>
-            </button>
+              </button>
+            </div>
           </div>
-        </div>
 
-        <div className="mt-6 text-center">
-          <p className="text-muted-foreground text-sm">
-            Don't have an account?{" "}
-            <Link href="/signup" className="text-primary hover:underline">
-              Register your pharmacy
-            </Link>
-          </p>
-          <p className="text-muted-foreground text-sm mt-2">
-            <Link href="/government/login" className="text-primary hover:underline">
-              Government Portal
-            </Link>
-          </p>
-          <div className="mt-4 p-3 bg-gray-800/50 rounded text-xs">
-            <p className="text-gray-300">
-              <strong>Note:</strong> Patients and doctors use the separate SehatSathi mobile app. This web portal is for
-              pharmacy and government use only.
+          <div className="mt-6 text-center">
+            <p className="text-purple-600 text-sm">
+              <Link href="/signup" className="hover:underline">Register</Link> {" • "}
+              <Link href="/government/login" className="hover:underline">Government Login</Link>
             </p>
           </div>
-        </div>
 
-        <div className="mt-6 p-4 bg-gray-800 rounded text-sm">
-          <p className="font-medium mb-2">Demo Credentials:</p>
-          <p>Government: admin / admin123</p>
-          <p>Pharmacy: MedPlus Nabha / password123</p>
-          <p className="text-xs text-gray-400 mt-2">
-            New pharmacies need government approval before accessing the system.
-          </p>
+          {/* Demo Credentials */}
+          <div className="mt-6 p-4 bg-purple-50 rounded text-sm border border-purple-200 shadow-inner">
+            <p className="font-medium mb-1 text-purple-700">Demo:</p>
+            <p className="text-purple-600 text-sm">Rajesh Medicals: rajesh_medicals / pharmacy123</p>
+            <p className="text-purple-600 text-sm">Apollo Pharmacy Delhi: apollo_pharmacy_delhi / pharmacy123</p>
+          </div>
         </div>
       </div>
+
+      <style jsx>{`
+        @keyframes gradient-x {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
+        }
+        .animate-gradient-x {
+          background-size: 200% 200%;
+          animation: gradient-x 15s ease infinite;
+        }
+
+        @keyframes particle-move {
+          0% { transform: translate(0, 0); opacity: 0.2; }
+          50% { transform: translate(10px, -10px); opacity: 0.5; }
+          100% { transform: translate(0, 0); opacity: 0.2; }
+        }
+        .animate-particle {
+          animation: particle-move linear infinite;
+        }
+
+        .hover\\:shadow-glow:hover {
+          box-shadow: 0 0 15px rgba(139, 92, 246, 0.6), 0 0 25px rgba(139, 92, 246, 0.4);
+        }
+      `}</style>
     </div>
   )
 }
