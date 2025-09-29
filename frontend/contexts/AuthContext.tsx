@@ -9,6 +9,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
+  refreshUser: () => Promise<void>;
   isAuthenticated: boolean;
 }
 
@@ -70,6 +71,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     router.push('/');
   };
 
+  const refreshUser = async () => {
+    try {
+      console.log('Refreshing user data...');
+      const updatedUser = await authApi.getCurrentUser();
+      console.log('Updated user data:', updatedUser);
+      setUser(updatedUser);
+      // Update localStorage with fresh user data
+      const currentData = JSON.parse(localStorage.getItem('user') || '{}');
+      currentData.user = updatedUser;
+      localStorage.setItem('user', JSON.stringify(currentData));
+      console.log('User data refreshed successfully');
+      return true; // Success
+    } catch (error) {
+      console.error('Error refreshing user data:', error);
+      // Don't logout on 401 - just return false to indicate failure
+      return false;
+    }
+  };
+
   const isAuthenticated = !!user;
 
   const value: AuthContextType = {
@@ -77,6 +97,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     isLoading,
     login,
     logout,
+    refreshUser,
     isAuthenticated,
   };
 

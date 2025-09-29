@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/AuthContext"
-import { governmentApi, User, GovernmentDashboard, PharmacyStock, ApiError } from "@/lib/api"
+import { governmentApi, User, type GovernmentDashboard, PharmacyStock, ApiError } from "@/lib/api"
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   LineChart, Line, PieChart, Pie, Cell, ResponsiveContainer
@@ -55,11 +55,19 @@ export default function GovernmentDashboard() {
     }
   }, [user])
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     if (user && (user.user_type === 'government' || user.user_type === 'admin')) {
-      fetchDashboardData()
-      fetchPendingPharmacies()
-      fetchAllStocks()
+      try {
+        setError('') // Clear any previous errors
+        await Promise.all([
+          fetchDashboardData(),
+          fetchPendingPharmacies(),
+          fetchAllStocks()
+        ])
+      } catch (error) {
+        console.error('Error refreshing government data:', error)
+        setError('Failed to refresh data. Please try again.')
+      }
     }
   }
 

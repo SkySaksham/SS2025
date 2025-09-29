@@ -15,7 +15,10 @@ type Section = "overview" | "inventory" | "analytics" | "profile"
 
 export default function PharmacyDashboard() {
   const router = useRouter()
-  const { user, logout } = useAuth()
+  const { user, logout, refreshUser, isLoading } = useAuth()
+  
+  // Debug logging
+  console.log('PharmacyDashboard rendered with user:', user?.user_type, user?.username)
   const [medicines, setMedicines] = useState<PharmacyStock[]>([])
   const [showAddForm, setShowAddForm] = useState(false)
   const [newMedicine, setNewMedicine] = useState<AddStockData>({
@@ -36,13 +39,42 @@ export default function PharmacyDashboard() {
   const totalRevenue = medicines.reduce((sum, m) => sum + m.quantity * m.price, 0)
 
   useEffect(() => {
-    if (user) fetchMedicines()
+    if (user && user.user_type === 'pharmacy') {
+      fetchMedicines()
+    }
   }, [user])
 
-  const handleRefresh = () => fetchMedicines()
+  const handleRefresh = async () => {
+    try {
+      // Check if user is pharmacy type
+      if (!user || user.user_type !== 'pharmacy') {
+        setError('Access denied. This page is for pharmacy users only.')
+      return
+    }
+
+      // Refresh user data to check approval status
+      const userRefreshed = await refreshUser()
+      if (!userRefreshed) {
+        setError('Unable to check approval status. Please try logging in again.')
+      return
+      }
+      // Refresh medicines data
+      await fetchMedicines()
+      setError('') // Clear any previous errors
+    } catch (error) {
+      console.error('Error refreshing data:', error)
+      setError('Failed to refresh data. Please try again.')
+    }
+  }
 
   const fetchMedicines = async () => {
     try {
+      // Double-check user type before making API call
+      if (!user || user.user_type !== 'pharmacy') {
+        console.error('fetchMedicines called with non-pharmacy user:', user?.user_type)
+        return
+      }
+      
       const data = await pharmacyApi.getStocks()
       setMedicines(data)
     } catch (error) {
@@ -59,7 +91,7 @@ export default function PharmacyDashboard() {
     try {
       await pharmacyApi.addStock(newMedicine)
       setNewMedicine({ medicine_name: "", quantity: 0, price: 0, expiry_date: "", batch_number: "" })
-      setShowAddForm(false)
+        setShowAddForm(false)
       fetchMedicines()
     } catch (error) {
       console.error("Error adding medicine:", error)
@@ -78,7 +110,38 @@ export default function PharmacyDashboard() {
 
   return (
     <ProtectedRoute allowedRoles={["pharmacy"]}>
-      <div className="flex min-h-screen bg-purple-50">
+      <div className="flex min-h-screen bg-purple-50 relative">
+        {/* Blur overlay for unapproved pharmacies */}
+        {user && !user.is_approved && (
+          <div className="fixed inset-0 bg-white bg-opacity-30 backdrop-blur-lg z-50 flex items-center justify-center">
+            <div className="bg-white bg-opacity-95 backdrop-blur-sm p-8 rounded-lg shadow-xl max-w-md mx-4 text-center border border-purple-200">
+              <div className="text-6xl mb-4">⏳</div>
+              <h2 className="text-2xl font-bold text-purple-800 mb-4">Account Pending Approval</h2>
+              <p className="text-gray-600 mb-6">
+                Your pharmacy account is awaiting government approval. You can view your dashboard but cannot add new medicines until approved.
+              </p>
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+                <p className="text-yellow-800 text-sm">
+                  <strong>Status:</strong> Pending Government Review
+                </p>
+              </div>
+              <div className="flex gap-3 justify-center">
+                <button 
+                  onClick={handleRefresh}
+                  className="px-4 py-2 bg-purple-700 text-white rounded-lg hover:bg-purple-800 transition-colors font-medium"
+                >
+                  🔄 Check Approval Status
+                </button>
+                <button 
+                  onClick={logout}
+                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+                >
+                  🚪 Logout
+            </button>
+          </div>
+        </div>
+          </div>
+        )}
         {/* Sidebar */}
         <aside className={`flex flex-col bg-purple-800 text-white transition-all duration-300 ${sidebarCollapsed ? "w-20" : "w-64"}`}>
           <div className="flex items-center justify-between p-6 border-b border-purple-700">
@@ -89,8 +152,8 @@ export default function PharmacyDashboard() {
               title={sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
             >
               {sidebarCollapsed ? <FiChevronRight /> : <FiChevronLeft />}
-            </button>
-          </div>
+          </button>
+        </div>
           <nav className="flex-1 px-2 py-4 space-y-2">
             {[
               { label: "Overview", key: "overview" },
@@ -123,7 +186,7 @@ export default function PharmacyDashboard() {
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-3xl font-bold text-purple-800">Welcome, {user?.pharmacy_name || user?.username}</h1>
             <button onClick={handleRefresh} className="btn btn-outline text-sm">🔄 Refresh</button>
-          </div>
+                </div>
 
           {/* Mini Overview Cards */}
           {activeSection === "overview" && (
@@ -137,8 +200,50 @@ export default function PharmacyDashboard() {
                 <p className="text-2xl font-bold text-purple-700">{totalStock}</p>
               </div>
               <div className="card p-4 bg-white shadow rounded-lg text-center">
-                <p className="text-sm text-muted-foreground">Total Revenue</p>
+                <p className="text-sm text-muted-foreground">Total Revenue In Inventory</p>
                 <p className="text-2xl font-bold text-purple-700">₹{totalRevenue}</p>
+              </div>
+            </section>
+          )}
+
+          {/* Auth Debug Info - Only show for non-approved users */}
+          {user && !user.is_approved && activeSection === "overview" && (
+            <section className="mb-6">
+              <div className="card p-6 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <h3 className="text-lg font-semibold text-yellow-800 mb-4">🔍 Authentication Debug Info</h3>
+                <div className="bg-white p-4 rounded border">
+                  <pre className="text-sm text-gray-700 overflow-auto">
+                    {JSON.stringify({
+                      isLoading,
+                      isAuthenticated: !!user,
+                      user: {
+                        id: user.id,
+                        username: user.username,
+                        user_type: user.user_type,
+                        is_approved: user.is_approved,
+                        pharmacy_name: user.pharmacy_name,
+                        email: user.email,
+                        license_number: user.license_number,
+                        address: user.address,
+                        phone: user.phone
+                      }
+                    }, null, 2)}
+                  </pre>
+                </div>
+                <div className="mt-4 flex gap-2">
+                  <button
+                    onClick={handleRefresh}
+                    className="btn btn-primary text-sm"
+                  >
+                    🔄 Refresh Status
+                  </button>
+                  <button
+                    onClick={logout}
+                    className="btn btn-outline text-sm"
+                  >
+                    🚪 Logout
+                  </button>
+                </div>
               </div>
             </section>
           )}
@@ -250,98 +355,199 @@ export default function PharmacyDashboard() {
             </div>
           )}
 
-          {/* Profile Section */}
-          {activeSection === "profile" && (
-            <div className="card p-6 bg-white shadow-md rounded-lg">
-              <h2 className="text-xl font-bold text-purple-700 mb-4">Profile</h2>
-              <p className="text-muted-foreground mb-2">Pharmacy Name: {user?.pharmacy_name}</p>
-              <p className="text-muted-foreground mb-2">Username: {user?.username}</p>
-              <p className="text-muted-foreground mb-2">Approval Status: {user?.is_approved ? "Approved" : "Pending"}</p>
-            </div>
-          )}
+           {/* Profile Section */}
+           {activeSection === "profile" && (
+             <div className="space-y-6">
+               <div className="bg-white p-6 shadow-md rounded-lg border border-purple-200">
+                 <h2 className="text-2xl font-bold text-purple-800 mb-6">Pharmacy Profile</h2>
+                 
+                 {/* Basic Information */}
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                   <div className="space-y-4">
+                     <div>
+                       <label className="block text-sm font-medium text-purple-700 mb-1">Pharmacy Name</label>
+                       <p className="text-gray-800 font-medium">{user?.pharmacy_name || 'Not provided'}</p>
+                     </div>
+                     <div>
+                       <label className="block text-sm font-medium text-purple-700 mb-1">Username</label>
+                       <p className="text-gray-800 font-medium">{user?.username}</p>
+                     </div>
+                     <div>
+                       <label className="block text-sm font-medium text-purple-700 mb-1">Email</label>
+                       <p className="text-gray-800 font-medium">{user?.email}</p>
+                     </div>
+                     <div>
+                       <label className="block text-sm font-medium text-purple-700 mb-1">License Number</label>
+                       <p className="text-gray-800 font-medium">{user?.license_number || 'Not provided'}</p>
+                     </div>
+                </div>
 
-          {/* Add Medicine Modal */}
-          {showAddForm && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <div className="card p-6 w-full max-w-md bg-white rounded-lg shadow-lg">
-                <h3 className="text-xl font-bold mb-4 text-purple-700">Add New Medicine</h3>
-                {!user?.is_approved && (
-                  <div className="mb-4 p-3 bg-red-100 border border-red-400 rounded-lg">
-                    <p className="text-red-800 text-sm">
-                      <strong>❌ Access Denied:</strong> You cannot add medicines until your account is approved.
-                    </p>
-                  </div>
-                )}
+                   <div className="space-y-4">
+                     <div>
+                       <label className="block text-sm font-medium text-purple-700 mb-1">Address</label>
+                       <p className="text-gray-800 font-medium">{user?.address || 'Not provided'}</p>
+                     </div>
+                     <div>
+                       <label className="block text-sm font-medium text-purple-700 mb-1">Phone</label>
+                       <p className="text-gray-800 font-medium">{user?.phone || 'Not provided'}</p>
+                     </div>
+                     <div>
+                       <label className="block text-sm font-medium text-purple-700 mb-1">Account Status</label>
+                       <div className="flex items-center gap-2">
+                         <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                           user?.is_approved 
+                             ? 'bg-green-100 text-green-800' 
+                             : 'bg-yellow-100 text-yellow-800'
+                         }`}>
+                           {user?.is_approved ? '✅ Approved' : '⏳ Pending Approval'}
+                         </span>
+                       </div>
+                     </div>
+                     <div>
+                       <label className="block text-sm font-medium text-purple-700 mb-1">User Type</label>
+                       <p className="text-gray-800 font-medium capitalize">{user?.user_type}</p>
+                     </div>
+                   </div>
+                 </div>
+
+                 {/* Statistics */}
+                 <div className="border-t border-purple-200 pt-6">
+                   <h3 className="text-lg font-semibold text-purple-800 mb-4">Pharmacy Statistics</h3>
+                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                     <div className="bg-purple-50 p-4 rounded-lg">
+                       <p className="text-sm text-purple-600 font-medium">Total Medicines</p>
+                       <p className="text-2xl font-bold text-purple-800">{totalMedicines}</p>
+                     </div>
+                     <div className="bg-purple-50 p-4 rounded-lg">
+                       <p className="text-sm text-purple-600 font-medium">Total Stock</p>
+                       <p className="text-2xl font-bold text-purple-800">{totalStock}</p>
+                     </div>
+                     <div className="bg-purple-50 p-4 rounded-lg">
+                       <p className="text-sm text-purple-600 font-medium">Total Revenue</p>
+                       <p className="text-2xl font-bold text-purple-800">₹{totalRevenue.toLocaleString()}</p>
+                     </div>
+                   </div>
+                 </div>
+
+                 {/* Action Buttons */}
+                 <div className="border-t border-purple-200 pt-6">
+                   <div className="flex gap-4">
+                     <button 
+                       onClick={handleRefresh}
+                       className="px-4 py-2 bg-purple-700 text-white rounded-lg hover:bg-purple-800 transition-colors"
+                     >
+                       🔄 Refresh Data
+                     </button>
+                     <button 
+                       onClick={logout}
+                       className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                     >
+                       🚪 Logout
+                     </button>
+                   </div>
+                 </div>
+               </div>
+             </div>
+           )}
+
+           {/* Add Medicine Modal */}
+           {showAddForm && (
+             <div className="fixed inset-0 bg-white bg-opacity-30 backdrop-blur-lg flex items-center justify-center z-50">
+               <div className="bg-white bg-opacity-95 backdrop-blur-sm p-6 w-full max-w-md rounded-lg shadow-xl border border-purple-200">
+                 <div className="flex items-center justify-between mb-4">
+                   <h3 className="text-xl font-bold text-purple-800">Add New Medicine</h3>
+                   <button 
+                     onClick={() => setShowAddForm(false)}
+                     className="text-purple-600 hover:text-purple-800 text-xl"
+                   >
+                     ×
+                   </button>
+                 </div>
+                 {!user?.is_approved && (
+                   <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                     <p className="text-red-700 text-sm">
+                       <strong>❌ Access Denied:</strong> You cannot add medicines until your account is approved.
+                     </p>
+                   </div>
+                 )}
                 <form onSubmit={handleAddMedicine} className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium mb-1">Medicine Name</label>
+                    <label className="block text-sm font-medium mb-2 text-purple-700">Medicine Name</label>
                     <input
                       type="text"
                       value={newMedicine.medicine_name}
                       onChange={(e) => setNewMedicine({ ...newMedicine, medicine_name: e.target.value })}
-                      className="input w-full"
+                      className="w-full px-3 py-2 border border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-800"
                       required
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1">Batch Number</label>
+                    <label className="block text-sm font-medium mb-2 text-purple-700">Batch Number</label>
                     <input
                       type="text"
                       value={newMedicine.batch_number}
                       onChange={(e) => setNewMedicine({ ...newMedicine, batch_number: e.target.value })}
-                      className="input w-full"
+                      className="w-full px-3 py-2 border border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-800"
                       required
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium mb-1">Quantity</label>
+                      <label className="block text-sm font-medium mb-2 text-purple-700">Quantity</label>
                       <input
                         type="number"
                         value={newMedicine.quantity}
                         onChange={(e) => setNewMedicine({ ...newMedicine, quantity: parseInt(e.target.value) || 0 })}
-                        className="input w-full"
+                        className="w-full px-3 py-2 border border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-800"
                         required
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-1">Price (₹)</label>
+                      <label className="block text-sm font-medium mb-2 text-purple-700">Price (₹)</label>
                       <input
                         type="number"
                         step="0.01"
                         value={newMedicine.price}
                         onChange={(e) => setNewMedicine({ ...newMedicine, price: parseFloat(e.target.value) || 0 })}
-                        className="input w-full"
-                        required
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Expiry Date</label>
-                    <input
-                      type="date"
-                      value={newMedicine.expiry_date}
-                      onChange={(e) => setNewMedicine({ ...newMedicine, expiry_date: e.target.value })}
-                      className="input w-full"
+                        className="w-full px-3 py-2 border border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-800"
                       required
                     />
                   </div>
-                  <div className="flex gap-2 pt-4">
+                </div>
+                <div>
+                    <label className="block text-sm font-medium mb-2 text-purple-700">Expiry Date</label>
+                  <input
+                    type="date"
+                    value={newMedicine.expiry_date}
+                    onChange={(e) => setNewMedicine({ ...newMedicine, expiry_date: e.target.value })}
+                      className="w-full px-3 py-2 border border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-800"
+                    required
+                  />
+                </div>
+                  <div className="flex gap-3 pt-4">
                     <button
                       type="submit"
                       disabled={loading || !user?.is_approved}
-                      className={`btn flex-1 ${user?.is_approved ? 'btn-primary bg-purple-700 hover:bg-purple-600 text-white' : 'btn-secondary'}`}
+                      className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+                        user?.is_approved 
+                          ? 'bg-purple-700 hover:bg-purple-800 text-white' 
+                          : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      }`}
                     >
-                      {loading ? "Adding..." : "Add Medicine"}
-                    </button>
-                    <button type="button" onClick={() => setShowAddForm(false)} className="btn btn-secondary flex-1">
-                      Cancel
-                    </button>
-                  </div>
-                </form>
-              </div>
+                    {loading ? "Adding..." : "Add Medicine"}
+                  </button>
+                    <button 
+                      type="button" 
+                      onClick={() => setShowAddForm(false)} 
+                      className="flex-1 px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-medium transition-colors"
+                    >
+                    Cancel
+                  </button>
+                </div>
+              </form>
             </div>
-          )}
+          </div>
+        )}
 
           {/* Error Message */}
           {error && (

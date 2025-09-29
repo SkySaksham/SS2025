@@ -31,8 +31,12 @@ DATABASE_PATH = "sehat_sathi.db"
 
 @contextmanager
 def get_db():
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = sqlite3.connect(DATABASE_PATH, timeout=30.0)
     conn.row_factory = sqlite3.Row
+    # Enable WAL mode for better concurrency
+    conn.execute("PRAGMA journal_mode=WAL")
+    # Set busy timeout for better concurrency handling
+    conn.execute("PRAGMA busy_timeout=30000")
     try:
         yield conn
     finally:
@@ -89,10 +93,13 @@ def create_token(user_id: int, user_type: str) -> str:
 def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:
         payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        print(f"Token payload: {payload}")
         return payload
     except jwt.ExpiredSignatureError:
+        print("Token expired")
         raise HTTPException(status_code=401, detail="Token expired")
-    except jwt.JWTError:
+    except jwt.JWTError as e:
+        print(f"JWT Error: {e}")
         raise HTTPException(status_code=401, detail="Invalid token")
 
 # Database initialization
@@ -385,6 +392,28 @@ async def login_simple(user: UserLogin):
             }
         }
 
+@app.get("/api/users/me")
+async def get_current_user(token_data: dict = Depends(verify_token)):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM users WHERE id = ?", (token_data["user_id"],))
+        user = cursor.fetchone()
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        return {
+            "id": user["id"],
+            "username": user["username"],
+            "email": user["email"],
+            "user_type": user["user_type"],
+            "is_approved": user["is_approved"],
+            "pharmacy_name": user["pharmacy_name"],
+            "license_number": user["license_number"],
+            "address": user["address"],
+            "phone": user["phone"]
+        }
+
 @app.get("/api/users/pending")
 async def get_pending_users(token_data: dict = Depends(verify_token)):
     if token_data["user_type"] not in ["government", "admin"]:
@@ -431,34 +460,49 @@ async def pharmacy_signup(pharmacy_data: dict):
             username = base_username
             password = pharmacy_data.get("password", "password123")  # Use custom password or default
             
-            # Ensure username is unique
+            # Ensure username is unique with proper transaction handling
             counter = 1
-            while True:
+            max_attempts = 100  # Prevent infinite loop
+            attempts = 0
+            
+            while attempts < max_attempts:
                 cursor.execute("SELECT * FROM users WHERE username = ?", (username,))
                 if not cursor.fetchone():
-                    break
-                username = f"{base_username}_{counter}"
-                counter += 1
+                    # Username is available, try to insert
+                    try:
+                        cursor.execute('''
+                            INSERT INTO users (username, email, password_hash, user_type, is_approved, 
+                                             pharmacy_name, license_number, address, phone)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (
+                            username,
+                            pharmacy_data.get("email"),
+                            hash_password(password),
+                            "pharmacy",
+                            False,  # Requires approval
+                            pharmacy_data.get("name"),
+                            pharmacy_data.get("license"),
+                            pharmacy_data.get("location"),
+                            pharmacy_data.get("phone")
+                        ))
+                        conn.commit()
+                        print(f"Created pharmacy user: {username}")
+                        break
+                    except sqlite3.IntegrityError:
+                        # Username was taken between check and insert, try next
+                        conn.rollback()
+                        username = f"{base_username}_{counter}"
+                        counter += 1
+                        attempts += 1
+                        continue
+                else:
+                    # Username exists, try next
+                    username = f"{base_username}_{counter}"
+                    counter += 1
+                    attempts += 1
             
-            print(f"Creating pharmacy user: {username}")
-            
-            # Create pharmacy user (pending approval)
-            cursor.execute('''
-                INSERT INTO users (username, email, password_hash, user_type, is_approved, 
-                                 pharmacy_name, license_number, address, phone)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                username,
-                pharmacy_data.get("email"),
-                hash_password(password),
-                "pharmacy",
-                False,  # Requires approval
-                pharmacy_data.get("name"),
-                pharmacy_data.get("license"),
-                pharmacy_data.get("location"),
-                pharmacy_data.get("phone")
-            ))
-            conn.commit()
+            if attempts >= max_attempts:
+                raise HTTPException(status_code=500, detail="Unable to generate unique username. Please try again.")
             
             print(f"Pharmacy user created successfully: {username}")
             
@@ -481,13 +525,16 @@ async def pharmacy_signup(pharmacy_data: dict):
 
 @app.get("/api/pharmacy/stocks")
 async def get_pharmacy_stocks(token_data: dict = Depends(verify_token)):
+    print(f"Pharmacy stocks request - user_type: {token_data.get('user_type')}, user_id: {token_data.get('user_id')}")
     if token_data["user_type"] != "pharmacy":
+        print("Access denied - not a pharmacy user")
         raise HTTPException(status_code=403, detail="Access denied")
     
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM pharmacy_stocks WHERE pharmacy_id = ?", (token_data["user_id"],))
         stocks = cursor.fetchall()
+        print(f"Found {len(stocks)} stocks for pharmacy {token_data['user_id']}")
         
         return [dict(stock) for stock in stocks]
 

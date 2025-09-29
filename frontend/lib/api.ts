@@ -111,6 +111,9 @@ const apiRequest = async <T>(
   const url = `${API_BASE_URL}${endpoint}`;
   const token = getAuthToken();
   
+  console.log(`API Request: ${url}`);
+  console.log(`Token: ${token ? 'Present' : 'Missing'}`);
+  
   const defaultHeaders: HeadersInit = {
     'Content-Type': 'application/json',
   };
@@ -130,8 +133,11 @@ const apiRequest = async <T>(
   try {
     const response = await fetch(url, config);
     
+    console.log(`Response status: ${response.status}`);
+    
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
+      console.log(`Error data:`, errorData);
       throw new ApiError(
         errorData.detail || `HTTP ${response.status}: ${response.statusText}`,
         response.status,
@@ -178,6 +184,10 @@ export const authApi = {
       body: JSON.stringify(userData),
     });
   },
+
+  getCurrentUser: async (): Promise<User> => {
+    return apiRequest<User>('/api/users/me');
+  }
 };
 
 // Pharmacy API
@@ -260,3 +270,4 @@ export const apiUtils = {
     }
   },
 };
+
